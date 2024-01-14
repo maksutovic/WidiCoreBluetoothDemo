@@ -190,7 +190,7 @@ extension BluetoothManager {
 	}
 	
 	public func sendSysEx() {
-		if let event = try? MIDIEvent.sysEx7(manufacturer: .threeByte(byte2: 0x02, byte3: 0x05), data: [0x01, 0x26, 0x00, 0x08, 0x30, 0x1B]) {
+		if let event = try? MIDIEvent.sysEx7(manufacturer: .threeByte(byte2: 0x02, byte3: 0x55), data: [0x01, 0x26, 0x00, 0x08, 0x30, 0x1B]) {
 			let packet = createBLEMIDIPacketForSysEx(midiSysExMessage: event.midi1RawBytes())
 			if let char = connectedPeripheralBLECharacteristic {
 				print("--- Sending:\(event) to: \(connectedPeripheral?.name ?? "N/A") ---")
