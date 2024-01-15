@@ -58,10 +58,37 @@ extension BluetoothManager: CBCentralManagerDelegate {
 			case .poweredOff:
 				print("CBCentral powered off")
 			case .poweredOn:
-				centralManager.scanForPeripherals(withServices: [BluetoothManager.bleMidiServiceUUID])
-				DispatchQueue.main.async {
-					self.isScanning = true
-				}
+                if let saved = UserDefaults.standard.object(forKey: "SavedTilt") as? String {
+                    if let uuid = UUID(uuidString: saved) {
+                        let knownPeripherals = centralManager.retrievePeripherals(withIdentifiers: [uuid])
+                        print("KNOWN PERIPHERALS: \(knownPeripherals.debugDescription)")
+                        if let peripheral = knownPeripherals.first {
+                            //We have a stored peripheral lets connect
+                            DispatchQueue.main.async {
+                                self.connectedPeripheral = peripheral
+                            }
+                            switch peripheral.state {
+                                case .disconnected:
+                                    centralManager.connect(self.connectedPeripheral!)
+                                case .connecting:
+                                    print("Peripheral is connecting")
+                                case .connected:
+                                    print("Peripheral is connected")
+                                    centralManager.connect(self.connectedPeripheral!)
+                                case .disconnecting:
+                                    print("Peripheral is disconnecting")
+                                @unknown default:
+                                    fatalError()
+                            }
+                        }
+                    }
+                } else {
+                    centralManager.scanForPeripherals(withServices: [BluetoothManager.bleMidiServiceUUID])
+                    DispatchQueue.main.async {
+                        self.isScanning = true
+                    }
+                }
+
 			@unknown default:
 				fatalError()
 		}
@@ -77,6 +104,8 @@ extension BluetoothManager: CBCentralManagerDelegate {
 			self.connectedPeripheral?.delegate = self
 			self.centralManager.stopScan()
 			self.isScanning = false
+            let uuidString = peripheral.identifier.uuidString
+            UserDefaults.standard.set(uuidString, forKey: "SavedTilt")
 			self.connectedPeripheral?.discoverServices([BluetoothManager.bleMidiServiceUUID])
 		}
 	}
@@ -85,7 +114,7 @@ extension BluetoothManager: CBCentralManagerDelegate {
 		DispatchQueue.main.async {
 			self.connectedPeripheral = nil
 			self.discoveredPeripherals.removeAll()
-			self.centralManager.scanForPeripherals(withServices: [BluetoothManager.bleMidiServiceUUID])
+			self.centralManager.scanForPeripherals(withServices: nil)
 			self.isScanning = true
 		}
 	}
@@ -125,8 +154,41 @@ extension BluetoothManager: CBPeripheralDelegate {
 		}
 		for char in chars {
 			print("\(peripheral.name ?? "N/A"): Char: \(char.description)")
+            if let value = char.value {
+                print("READ CHAR VALUE:\(Array(value).hexString)")
+            } else {
+                print("CAN'T READ VALUE")
+            }
 			self.connectedPeripheral?.discoverDescriptors(for: char)
+            if char.properties.contains(.read) {
+                print("READ")
+            }
+            if char.properties.contains(.writeWithoutResponse) {
+                print("WRITE WITHOUT RESPONE")
+            }
+            if char.properties.contains(.write) {
+                print("WRITE")
+            }
+            if char.properties.contains(.notify) {
+                print("NOTIFY")
+            }
+            if char.properties.contains(.indicate) {
+                print("INDICATE")
+            }
+            if char.properties.contains(.authenticatedSignedWrites) {
+                print("AUTHENTICATED SIGNED WRITES")
+            }
+            if char.properties.contains(.extendedProperties) {
+                print("EXTENDED PROPERTIES")
+            }
+            if char.properties.contains(.notifyEncryptionRequired) {
+                print("NOTIFY ENCRYPTION REQUIRED")
+            }
+            if char.properties.contains(.indicateEncryptionRequired) {
+                print("INDICATE ENCRYPTION REQUIRED")
+            }
 			if char.uuid == BluetoothManager.bleMidiCharacteristicUUID {
+                connectedPeripheral?.readValue(for: char)
 				connectedPeripheral?.setNotifyValue(true, for: char)
 				connectedPeripheralBLECharacteristic = char
 			}
@@ -142,6 +204,7 @@ extension BluetoothManager: CBPeripheralDelegate {
 			return
 		}
 		for descriptor in descriptors {
+            print("\(peripheral.name ?? "N/A") Descriptor:\(descriptor)")
 			self.connectedPeripheral?.readValue(for: descriptor)
 		}
 	}
@@ -150,6 +213,7 @@ extension BluetoothManager: CBPeripheralDelegate {
 		if let error {
 			print(error.localizedDescription)
 		}
+        print("DID UPDATE VALUE FOR DESC")
 		print("\(peripheral.name ?? "N/A"): Descriptor: \(descriptor.description) Value: \(String(describing: descriptor.value))")
 	}
 	
